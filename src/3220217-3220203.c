@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <stdarg.h>
 #include <pthread.h>
 #include <unistd.h>
 #include "3220217-3220203.h"
