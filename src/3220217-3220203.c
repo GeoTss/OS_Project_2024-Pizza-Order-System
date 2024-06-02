@@ -110,10 +110,10 @@ int main(int argc, char **argv) {
     printf("%-27s %d\n", "Failed payments:", failedPayments);
 
     printf("%-27s %ld minutes\n", "Max service time:", (max_serv_time.tv_sec + (max_serv_time.tv_nsec / NANOSECONDS_PER_SECOND)));
-    printf("%-27s %ld minutes\n", "Average service time:", (avg_serv_time.tv_sec + (avg_serv_time.tv_nsec / NANOSECONDS_PER_SECOND)) / successfullPayments);
+    printf("%-27s %.2f minutes\n", "Average service time:", (avg_serv_time.tv_sec + ((float)avg_serv_time.tv_nsec / NANOSECONDS_PER_SECOND)) / successfullPayments);
 
     printf("%-27s %ld minutes\n", "Max cold time:", (max_cold_time.tv_sec + (max_cold_time.tv_nsec / NANOSECONDS_PER_SECOND)));
-    printf("%-27s %ld minutes\n", "Average cold time:", (avg_cold_time.tv_sec + (avg_cold_time.tv_nsec / NANOSECONDS_PER_SECOND)) / successfullPayments);
+    printf("%-27s %.2f minutes\n", "Average cold time:", (avg_cold_time.tv_sec + ((float)avg_cold_time.tv_nsec / NANOSECONDS_PER_SECOND)) / successfullPayments);
     printf("%-27s %d\n", "Total:", total);
 
 
