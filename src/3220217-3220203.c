@@ -125,12 +125,6 @@ int bounded_rand(int lower_bound, int upper_bound, unsigned int *seed) {
 }
 
 void clean_up(int totalCustomers, int errorCode) {
-    // for (int i = 0; i < totalCustomers; ++i) {
-    //     if (threadIDS[i] != NULL) {
-    //         free(threadIDS[i]);
-    //     }
-    // }
-    // free(threadIDS);
     pthread_cond_destroy(&condFindTel);
     pthread_cond_destroy(&condFindCook);
     pthread_cond_destroy(&condFindOven);
