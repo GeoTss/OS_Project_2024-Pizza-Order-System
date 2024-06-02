@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Invalid argument for seed: %s\n", argv[2]);
         return ARGUMENT_ERROR;
     }
-    srand(seed);
+    // srand(seed);
 
     if (pthread_mutex_init(&mutexOut, NULL) != 0 ||
         pthread_mutex_init(&mutexTel, NULL) != 0 ||
@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
             clean_up(totalCustomers, MEMORY_ALLOC_ERROR);
         }
         threadArgs->oid = i;
-        threadArgs->seed = seed;
+        threadArgs->seed = &seed;
         if (pthread_create(&threads[i], NULL, order, (void*)threadArgs) != 0) {
             fprintf(stderr, "Failed to create thread (%d).\n", i);
             free(threadArgs);
@@ -102,23 +102,26 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("Successful payments: %d.\n", successfullPayments);
-    printf("Failed payments: %d.\n", failedPayments);
+    printf("%-27s %d\n", "Margarita pizzas ordered: ", type_sales[PIZZA_MARGARITA]);
+    printf("%-27s %d\n", "Peperoni pizzas ordered: ", type_sales[PIZZA_PEPERONI]);
+    printf("%-27s %d\n", "Special pizzas ordered: ", type_sales[PIZZA_SPECIAL]);
 
-    printf("Max service time: %ld minutes.\n", timespec_to_minutes(max_serv_time));
-    // avg_serv_time.tv_sec = avg_serv_time.tv_sec / SECONDS_PER_MINUTE;
-    printf("Average service time: %ld minutes.\n", timespec_to_minutes(avg_serv_time) / successfullPayments);
+    printf("%-27s %d\n", "Successful payments:", successfullPayments);
+    printf("%-27s %d\n", "Failed payments:", failedPayments);
 
-    printf("Max cold time: %ld minutes.\n", timespec_to_minutes(max_cold_time));
-    // avg_cold_time.tv_sec = avg_cold_time.tv_sec / SECONDS_PER_MINUTE;
-    printf("Average cold time: %ld minutes.\n", timespec_to_minutes(avg_cold_time) / successfullPayments);
-    printf("Total: %d\n", total);
+    printf("%-27s %ld minutes\n", "Max service time:", (max_serv_time.tv_sec + (max_serv_time.tv_nsec / NANOSECONDS_PER_SECOND)));
+    printf("%-27s %ld minutes\n", "Average service time:", (avg_serv_time.tv_sec + (avg_serv_time.tv_nsec / NANOSECONDS_PER_SECOND)) / successfullPayments);
+
+    printf("%-27s %ld minutes\n", "Max cold time:", (max_cold_time.tv_sec + (max_cold_time.tv_nsec / NANOSECONDS_PER_SECOND)));
+    printf("%-27s %ld minutes\n", "Average cold time:", (avg_cold_time.tv_sec + (avg_cold_time.tv_nsec / NANOSECONDS_PER_SECOND)) / successfullPayments);
+    printf("%-27s %d\n", "Total:", total);
+
 
     clean_up(totalCustomers, SUCCESS);
 }
 
 int bounded_rand(int lower_bound, int upper_bound, unsigned int *seed) {
-    return lower_bound + (int)(((double)rand_r(seed) / ((double)RAND_MAX + 1)) * (upper_bound - lower_bound + 1));
+    return lower_bound + rand_r(seed) % (upper_bound - lower_bound + 1);
 }
 
 void clean_up(int totalCustomers, int errorCode) {
@@ -176,11 +179,8 @@ int compare_timespec(struct timespec* t1, struct timespec* t2) {
     }
 }
 
-time_t timespec_to_minutes(struct timespec ts) {
-    time_t total_seconds = ts.tv_sec + (ts.tv_nsec / NANOSECONDS_PER_SECOND);
-    time_t total_minutes = total_seconds / SECONDS_PER_MINUTE;
-
-    return total_minutes;
+static inline time_t timespec_to_minutes(struct timespec ts) {
+    return (ts.tv_sec + ts.tv_nsec / NANOSECONDS_PER_SECOND);
 }
 
 struct timespec add_timespecs(struct timespec t1, struct timespec t2) {
@@ -209,8 +209,6 @@ void *order(void *__threadArgs) {
 
     struct tm timeInfo;
 
-    clock_gettime(CLOCK_REALTIME, &cust_appeared);
-
     thread_args_t args = *(thread_args_t *)__threadArgs;
 
     if (pthread_mutex_lock(&mutexOut) != 0) {
@@ -238,6 +236,9 @@ void *order(void *__threadArgs) {
     --available_tel;
     pthread_mutex_unlock(&mutexTel);
 
+    getTime_r(&cust_appeared, &timeInfo, time_buffer);
+    // clock_gettime(CLOCK_REALTIME, &cust_appeared);
+
     if (pthread_mutex_lock(&mutexOut) != 0) {
         fprintf(stderr, "Delivery with number <%d>: Error locking mutexOut.\n", args.oid);
         free(__threadArgs);
@@ -245,17 +246,17 @@ void *order(void *__threadArgs) {
         pthread_exit(NULL);
     }
 
-    getTime_r(&__time, &timeInfo, time_buffer);
+    // getTime_r(&__time, &timeInfo, time_buffer);
 
     printf("Delivery with number <%d>: Found available telephone at: [%s].\n", args.oid, time_buffer);
     // printf("Delivery with number <%d>: Available telephones: %d\n", args.oid, available_tel);
     pthread_mutex_unlock(&mutexOut);
 
-    int pizza_n = bounded_rand(T_ORDERLOW, T_ORDERHIGH, &args.seed);
+    int pizza_n = bounded_rand(T_ORDERLOW, T_ORDERHIGH, args.seed);
     int cust_total = 0;
     int cust_types_count[3] = { 0 };
     for (int i = 0; i < pizza_n; ++i) {
-        int chance = rand_r(&args.seed) % 100;
+        int chance = rand_r(args.seed) % 100;
         int type = -1;
         if (chance <= P_S)
             type = PIZZA_SPECIAL;
@@ -269,36 +270,29 @@ void *order(void *__threadArgs) {
         cust_total += pizza_cost[type];
     }
 
-    int paymentTime = bounded_rand(T_PAYMENTLOW, T_PAYMENTHIGH, &args.seed);
+    int paymentTime = bounded_rand(T_PAYMENTLOW, T_PAYMENTHIGH, args.seed);
     sleep(paymentTime);
 
     getTime_r(&__time, &timeInfo, time_buffer);
 
-    int fail_chance = (rand_r(&args.seed) % 100);
-    if (fail_chance <= P_FAIL) {
-        if (pthread_mutex_lock(&mutexOut) != 0) {
-            fprintf(stderr, "Delivery with number <%d>: Error locking mutexOut.\n", args.oid);
-            free(__threadArgs);
-            __threadArgs = NULL;
-            pthread_exit(NULL);
-        }
-        ++failedPayments;
-        printf("Delivery with number <%d>: Payment failed at [%s].\n", args.oid, time_buffer);
-        pthread_mutex_unlock(&mutexOut);
+    int fail_chance = rand_r(args.seed) % 100;
+    // int fail_chance = 1;
+    // if (fail_chance <= P_FAIL) {
+    //     if (pthread_mutex_lock(&mutexOut) != 0) {
+    //         fprintf(stderr, "Delivery with number <%d>: Error locking mutexOut.\n", args.oid);
+    //         free(__threadArgs);
+    //         __threadArgs = NULL;
+    //         pthread_exit(NULL);
+    //     }
+    //     ++failedPayments;
+    //     ++available_tel;
+    //     printf("Delivery with number <%d>: Payment failed at [%s].\n", args.oid, time_buffer);
+    //     pthread_mutex_unlock(&mutexOut);
 
-        free(__threadArgs);
-        __threadArgs = NULL;
-        pthread_exit(NULL);
-    }
-
-    if (pthread_mutex_lock(&mutexOut) != 0) {
-        fprintf(stderr, "Delivery with number <%d>: Error locking mutexOut.\n", args.oid);
-        free(__threadArgs);
-        __threadArgs = NULL;
-        pthread_exit(NULL);
-    }
-    printf("Delivery with number <%d>: Payment was successful, customer total: %d, [%s]\n", args.oid, cust_total, time_buffer);
-    pthread_mutex_unlock(&mutexOut);
+    //     free(__threadArgs);
+    //     __threadArgs = NULL;
+    //     pthread_exit(NULL);
+    // }
 
     if (pthread_mutex_lock(&mutexTel) != 0) {
         fprintf(stderr, "Delivery with number <%d>: Error locking mutexTel.\n", args.oid);
@@ -307,8 +301,29 @@ void *order(void *__threadArgs) {
         pthread_exit(NULL);
     }
 
-    total += cust_total;
     ++available_tel;
+    if(fail_chance <= P_FAIL){
+        ++failedPayments;
+
+        if (pthread_mutex_lock(&mutexOut) != 0) {
+            fprintf(stderr, "Delivery with number <%d>: Error locking mutexOut.\n", args.oid);
+            free(__threadArgs);
+            __threadArgs = NULL;
+            pthread_exit(NULL);
+        }
+
+        printf("Delivery with number <%d>: Payment failed at [%s].\n", args.oid, time_buffer);
+        pthread_mutex_unlock(&mutexOut);
+
+        free(__threadArgs);
+        __threadArgs = NULL;
+
+        pthread_cond_signal(&condFindTel);
+
+        pthread_mutex_unlock(&mutexTel);
+        pthread_exit(NULL);
+    }
+    total += cust_total;
     ++successfullPayments;
 
     for(int i = 0; i < 3; ++i)
@@ -321,10 +336,9 @@ void *order(void *__threadArgs) {
         fprintf(stderr, "Delivery with number <%d>: Error locking mutexOut.\n", args.oid);
         free(__threadArgs);
         __threadArgs = NULL;
-
         pthread_exit(NULL);
     }
-    printf("Delivery with number <%d>: Looking for cook...\n", args.oid);
+    printf("Delivery with number <%d>: Payment was successful, customer total: %d, [%s]\n", args.oid, cust_total, time_buffer);
     pthread_mutex_unlock(&mutexOut);
 
     if (pthread_mutex_lock(&mutexCook) != 0) {
@@ -414,7 +428,10 @@ void *order(void *__threadArgs) {
 
         pthread_exit(NULL);
     }
+    printf("Delivery with number <%d>: Had ordered %d pizzas.\n", args.oid, pizza_n);
+    printf("Delivery with number <%d>: Avaiable ovens before increment: %d\n", args.oid, available_oven);
     available_oven += pizza_n;
+    printf("Delivery with number <%d>: Avaiable ovens after increment: %d\n", args.oid, available_oven);
     pthread_cond_broadcast(&condFindOven);
     pthread_mutex_unlock(&mutexOven);
 
@@ -465,7 +482,7 @@ void *order(void *__threadArgs) {
     // printf("Delivery with number <%d>: Available delivery: %d\n", args.oid, available_delivery);
     pthread_mutex_unlock(&mutexOut);
 
-    int delTime = bounded_rand(T_DELLOW, T_DELHIGH, &args.seed);
+    int delTime = bounded_rand(T_DELLOW, T_DELHIGH, args.seed);
     // printf("Delivery with number <%d>: Delivering pizzas...\n", args.oid);
 
     sleep(delTime);
